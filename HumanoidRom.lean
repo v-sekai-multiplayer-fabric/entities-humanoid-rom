@@ -6,6 +6,7 @@ import HumanoidRom.adapters.B3DParser
 import HumanoidRom.adapters.KusudamaShader
 import HumanoidRom.core.EWBIKDecomposition
 import HumanoidRom.core.HumanoidConstraints
+import HumanoidRom.core.KusudamaEncoding
 import HumanoidRom.core.KusudamaSolver
 import HumanoidRom.core.MeshROM
 import HumanoidRom.core.MuscleConstraint
