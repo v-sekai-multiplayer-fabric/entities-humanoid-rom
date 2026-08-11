@@ -95,7 +95,30 @@ private def solveBody : List SlangStmt :=
           (.bin "+" (.var "center")
             (.member (.index (.var "cone_sequence") (.bin "*" (.var "gi") (.litUint 3))) "xyz"))
       ]
-  , .assign (.var "center") (.call "normalize" [.var "center"])
+  -- The centroid of the cone centres is degenerate whenever the sequence is symmetric:
+  -- three equidistant cones sum to zero, as do an opposed pair and a tetrahedral four.
+  -- `normalize` of that is undefined and one unit in the last place swings the pole 45
+  -- degrees, which is the flip. See `KusudamaEncoding` for the measurement.
+  --
+  -- So the centroid is kept wherever it is defined, and a cone is selected where it is not.
+  -- That is deliberate: the fix must not change an answer that was already right, and every
+  -- non-degenerate sequence keeps exactly the pole it had. Only the sequences that had no
+  -- pole gain one.
+  --
+  -- The test is relative rather than absolute. The sum of `n` unit vectors has magnitude at
+  -- most `n`, so a squared magnitude below `n*n` times the float epsilon is cancellation
+  -- rather than a short vector. There is no tuned number here.
+  , .declInit (.scalar .float) "cen_sq" (.call "dot" [.var "center", .var "center"])
+  , .declInit (.scalar .float) "cen_floor"
+      (.bin "*" (.litFloat 1e-12)
+        (.bin "*" (.call "float" [.var "cone_count"]) (.call "float" [.var "cone_count"])))
+  , .ifThen (.bin ">" (.var "cen_sq") (.var "cen_floor"))
+      [ .assign (.var "center") (.call "normalize" [.var "center"]) ]
+      -- Cone zero, and not the nearest cone. It is a total choice that does not depend on
+      -- `dir`, so one kusudama has one pole and the projection below stays consistent for
+      -- every direction tested against it.
+      [ .assign (.var "center")
+          (.member (.index (.var "cone_sequence") (.litUint 0)) "xyz") ]
   -- Build tangent-plane basis
   , .declInit (.vec .float 3) "u_axis"
       (.ternary

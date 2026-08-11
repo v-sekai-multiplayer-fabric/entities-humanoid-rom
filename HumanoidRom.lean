@@ -11,6 +11,7 @@ import HumanoidRom.core.KusudamaSolver
 import HumanoidRom.core.MeshROM
 import HumanoidRom.core.MuscleConstraint
 import HumanoidRom.core.PrismaticJoint
+import HumanoidRom.core.QuotientSelection
 import HumanoidRom.core.ROMPipeline
 import HumanoidRom.core.ROMPredictor
 import HumanoidRom.core.ROMSampling
