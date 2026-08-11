@@ -45,3 +45,42 @@ does not.
 Range of motion therefore belongs on a different seam. It validates motion that a simulator
 produces or that a corpus supplies. It is not a constraint the simulator holds, and a pose
 outside these ranges is one to reject or to flag rather than one to clamp.
+
+## Remark: the kusudama flip is a degenerate centroid
+
+`HumanoidRom/core/KusudamaEncoding.lean` records why a kusudama solve flips when three cones
+are equidistant, and it is not a race.
+
+`KusudamaSolver` builds the pole of its gnomonic projection by summing every cone centre and
+normalising. **Three equidistant cones sum to zero.** Measured in double precision:
+
+    3 equidistant, 120 degrees apart   |sum| = 4.003e-16   degenerate
+    4 tetrahedral                      |sum| = 0           degenerate
+    2 opposed                          |sum| = 0           degenerate
+    3 clustered, asymmetric            |sum| = 2.800       fine
+
+`normalize` of zero is undefined, so the pole follows whatever noise survives the sum.
+Perturbing one coordinate by a single unit in the last place moves it from (0, 1, 0) to
+(-0.707, 0.707, 0), which is 45 degrees of swing from one bit. That reproduces on one thread,
+so it is a discontinuous function evaluated at its discontinuity rather than a race.
+
+The degenerate cases are the well-formed ones. A symmetric limit is what a joint with no
+preferred direction has, so the solver failed exactly on the limits an author writes by hand.
+
+**The fix is to stop deriving a pole.** A gnomonic projection is only valid inside a hemisphere
+of its pole, so a pole averaged over cones that span more than a hemisphere was wrong before it
+was degenerate. Project against the nearest cone instead: it is a real cone centre, so it is a
+unit vector by construction and never needs normalising, and ties break by the lower index,
+which is a total order and gives the same answer on every machine and in every thread.
+
+The file proves the degeneracy of the opposed and equidistant cases, that an asymmetric case is
+fine, and that the nearest cone is defined and deterministic on both degenerate inputs.
+
+## Remark: a joint limit is one kusudama, not three ranges
+
+A SOMA joint is three hinges named `_x`, `_y` and `_z`, and an MJCF `range` on each describes a
+box. A shoulder is not a box. The reachable set is a region on a sphere, and an arm may reach
+far to one side only while it is also low, which a cone sequence says and three ranges cannot.
+
+So 66 scalar limits become 22 kusudamas, one for each joint, each a swing cone sequence with a
+twist range.
