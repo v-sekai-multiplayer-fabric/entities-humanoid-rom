@@ -13,5 +13,6 @@ import HumanoidRom.core.PrismaticJoint
 import HumanoidRom.core.ROMPipeline
 import HumanoidRom.core.ROMPredictor
 import HumanoidRom.core.ROMSampling
+import HumanoidRom.core.SimulatorLimits
 import HumanoidRom.core.SphericalPolygon
 import HumanoidRom.core.StarHeadings
