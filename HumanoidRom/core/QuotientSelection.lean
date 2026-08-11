@@ -27,10 +27,24 @@
 -- The tie is `dot = 0`, which is a relative rotation of exactly 180 degrees, and that is a
 -- pose that occurs rather than an exotic one. At the tie:
 --
---   * `signbit` flips only when the zero is **negative** zero, so the answer depends on how
---     the zero was produced and not on the rotation. `signbit(+0.0)` is false and
+--   * `signbit` flips only when the zero is **negative** zero. `signbit(+0.0)` is false and
 --     `signbit(-0.0)` is true.
 --   * `<= 0` always flips.
+--
+-- A signed zero is a real feature of the format. It records the sign a quantity had before it
+-- underflowed, so `-1e-300 * 1e-300` is `-0.0` and the sign is information. `signbit` is the
+-- right question after an underflow and a meaningless one after an exact cancellation, where
+-- there was no sign to remember. Here it is being read as though it were `d < 0`, and those
+-- two differ only at `-0.0`.
+--
+-- **The authored case is not noisy.** IEEE gives `+0.0` for that dot product every time,
+-- because `+0 * x` is `+0` and `+0 + +0` is `+0`. So the quaternion fault is deterministic
+-- and inconsistent, rather than flaky: `flip1` and `flip2` never flip, `flip3` always does,
+-- on every run and every machine.
+--
+-- That is a better account of why it survived than rarity. A flaky fault gets chased. One
+-- that is wrong the same way every time, on an input the test data cannot produce, gets
+-- shipped.
 --
 -- So the same tie is resolved two different ways inside one function. Neither is wrong on its
 -- own. Being inconsistent is.
