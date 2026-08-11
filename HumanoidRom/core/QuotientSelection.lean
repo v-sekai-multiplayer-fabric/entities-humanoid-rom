@@ -170,6 +170,32 @@ theorem align_is_idempotent :
 theorem align_is_idempotent_far :
     align ident (align ident quarterTurnX.neg) = align ident quarterTurnX.neg := by decide
 
+-- ── A fix must not change the answers that were already right ──────────────
+
+/-- The shortest path rule, as it behaves away from the tie: keep `q` when the dot is
+    positive and negate it when the dot is negative. This is what `signbit` computes, and
+    what `<= 0` computes, wherever the two agree. -/
+def shortestPath (ref q : Quat) : Quat :=
+  if dot ref q > 0 then q else q.neg
+
+/-- **The fix changes nothing that was already defined.** For every input whose dot is not
+    zero, `align` returns exactly what the old rule returned. So the whole neighbourhood of
+    working behaviour is preserved, and only the point that had no answer gains one.
+
+    This is the property a degeneracy fix has to have. Without it the change is not a fix, it
+    is a different algorithm with a different output on inputs that were never broken. -/
+theorem align_agrees_away_from_the_tie (ref q : Quat) (h : dot ref q ≠ 0) :
+    align ref q = shortestPath ref q := by
+  unfold align shortestPath
+  by_cases hp : dot ref q > 0
+  · simp [hp]
+  · have hn : dot ref q < 0 := by omega
+    simp [hp, hn]
+
+/-- And at the tie it differs from both of the old rules, which is the entire change. -/
+theorem align_differs_only_at_the_tie :
+    align ident halfTurnX ≠ halfTurnX.neg := by decide
+
 -- ── The two failures, side by side ─────────────────────────────────────────
 
 /-- Godot resolves the tie one way in `flip1` and `flip2`, and the other way in `flip3` when
