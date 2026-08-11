@@ -69,6 +69,18 @@ structure Kusudama where
   cones    : List Cone
   twistMin : Deg
   twistMax : Deg
+  /-- The projection pole, carried rather than derived.
+
+      Deriving a pole from the cones is what failed: a symmetric sequence sums to zero and
+      `normalize` of zero is undefined. Handling that is a repair. **Carrying the pole makes
+      the failure unreachable**, because there is no sum to cancel.
+
+      A joint already has this direction. It is the bone's rest direction, it always exists,
+      and an author who places cones has it in hand. So the field costs nothing to fill and
+      removes a whole class of input from the solver's reach. -/
+  poleX : Int
+  poleY : Int
+  poleZ : Int
   deriving Repr, DecidableEq
 
 -- ── The degeneracy, stated ─────────────────────────────────────────────────
@@ -85,7 +97,8 @@ def isDegenerate (ks : Kusudama) : Bool := centroid ks == (0, 0, 0)
 def opposedPair : Kusudama :=
   { cones := [{ x := 0, y := 0, z := 1000, halfAngle := 30 },
               { x := 0, y := 0, z := -1000, halfAngle := 30 }]
-    twistMin := -45, twistMax := 45 }
+    twistMin := -45, twistMax := 45
+    poleX := 0, poleY := 1000, poleZ := 0 }
 
 /-- Three cones at the vertices of an equilateral triangle on a great circle, written with
     exact integer coordinates so the sum is exactly zero rather than nearly zero. -/
@@ -93,20 +106,34 @@ def threeEquidistant : Kusudama :=
   { cones := [{ x := 2000, y := 0, z := 0, halfAngle := 20 },
               { x := -1000, y := 1732, z := 0, halfAngle := 20 },
               { x := -1000, y := -1732, z := 0, halfAngle := 20 }]
-    twistMin := -30, twistMax := 30 }
+    twistMin := -30, twistMax := 30
+    poleX := 0, poleY := 0, poleZ := 1000 }
 
 /-- An asymmetric sequence, which is the case that happened to work. -/
 def clustered : Kusudama :=
   { cones := [{ x := 1000, y := 0, z := 0, halfAngle := 20 },
               { x := 900, y := 300, z := 0, halfAngle := 20 },
               { x := 900, y := -300, z := 0, halfAngle := 20 }]
-    twistMin := -30, twistMax := 30 }
+    twistMin := -30, twistMax := 30
+    poleX := 0, poleY := 0, poleZ := 1000 }
 
 theorem opposed_is_degenerate : isDegenerate opposedPair = true := by decide
 
 theorem three_equidistant_is_degenerate : isDegenerate threeEquidistant = true := by decide
 
 theorem clustered_is_fine : isDegenerate clustered = false := by decide
+
+
+/-- A carried pole is never the origin, so it never needs normalising from a cancellation.
+    This is the property the derived pole could not have. -/
+def poleIsDefined (ks : Kusudama) : Bool :=
+  !(ks.poleX == 0 && ks.poleY == 0 && ks.poleZ == 0)
+
+theorem opposed_has_a_pole_though_its_centroid_is_zero :
+    isDegenerate opposedPair = true && poleIsDefined opposedPair = true := by decide
+
+theorem equidistant_has_a_pole_though_its_centroid_is_zero :
+    isDegenerate threeEquidistant = true && poleIsDefined threeEquidistant = true := by decide
 
 -- ── The fix ────────────────────────────────────────────────────────────────
 

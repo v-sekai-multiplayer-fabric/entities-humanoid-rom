@@ -1,90 +1,45 @@
 -- SPDX-License-Identifier: MIT
 -- Copyright (c) 2026-present K. S. Ernest (iFire) Lee
 --
--- Choosing a representative from a quotient, and the two ways it goes wrong.
---
--- ## The shape of the bug
+-- Choosing a representative from a quotient.
 --
 -- A direction is a point on a sphere. A rotation is a point on a sphere with its antipode
 -- glued to it, because a quaternion and its negation are the same rotation. Neither has a
--- canonical representative, and an operation that combines several of them has to choose one
--- for each before it can start.
---
--- There are exactly two ways that goes wrong, and this project has now met both.
---
--- **Averaging instead of selecting.** `KusudamaSolver` built the pole of its projection by
--- summing every cone centre and normalising. Three equidistant cones sum to zero, and
--- `normalize` of zero is undefined, so one unit in the last place moved the pole 45 degrees.
--- A mean of directions is not a direction. See `KusudamaEncoding`.
---
--- **Selecting with an order that is not total.** Godot's `spherical_cubic_interpolate`
--- selects a sign for each of three quaternions relative to a reference:
---
---     flip1 = signbit(from.dot(pre))
---     flip2 = signbit(from.dot(to))
---     flip3 = flip2 ? to.dot(post) <= 0 : signbit(to.dot(post))
---
--- The tie is `dot = 0`, which is a relative rotation of exactly 180 degrees, and that is a
--- pose that occurs rather than an exotic one. At the tie:
---
---   * `signbit` flips only when the zero is **negative** zero. `signbit(+0.0)` is false and
---     `signbit(-0.0)` is true.
---   * `<= 0` always flips.
---
--- A signed zero is a real feature of the format. It records the sign a quantity had before it
--- underflowed, so `-1e-300 * 1e-300` is `-0.0` and the sign is information. `signbit` is the
--- right question after an underflow and a meaningless one after an exact cancellation, where
--- there was no sign to remember. Here it is being read as though it were `d < 0`, and those
--- two differ only at `-0.0`.
---
--- **The authored case is not noisy.** IEEE gives `+0.0` for that dot product every time,
--- because `+0 * x` is `+0` and `+0 + +0` is `+0`. So the quaternion fault is deterministic
--- and inconsistent, rather than flaky: `flip1` and `flip2` never flip, `flip3` always does,
--- on every run and every machine.
---
--- That is a better account of why it survived than rarity. A flaky fault gets chased. One
--- that is wrong the same way every time, on an input the test data cannot produce, gets
--- shipped.
---
--- So the same tie is resolved two different ways inside one function. Neither is wrong on its
--- own. Being inconsistent is.
---
--- ## Why one broke and the other did not
---
--- The quaternion inconsistency has sat in a shipping engine unnoticed, and the kusudama one
--- broke a solve. Measuring where the two rules actually disagree says why:
---
---     d > 0                      agree
---     d < 0                      agree
---     d = -0.0                   agree
---     cos(pi/2), a computed 180  agree      the dot is 6.123e-17, not zero
---     d = +0.0, authored         DISAGREE
---
--- **They differ at exactly one value.** A computed half turn never lands on it, because
--- `cos(pi/2)` is 6.123e-17. Reaching it needs an authored key, a quaternion written literally
--- as (0, 1, 0, 0) against an identity reference. A test suite built from captured or computed
--- motion cannot produce it.
---
--- So the rule is not that ties are dangerous. It is:
---
--- **A degenerate point matters in proportion to how much the operation amplifies near it.**
---
---   * `normalize(sum)` divides by a quantity that goes to zero. One unit in the last place
---     becomes 45 degrees, and the whole neighbourhood of the tie is wrong, not just the tie.
---     That fires on ordinary input.
---   * `signbit(dot)` reads a sign. It is discontinuous at one point and correct everywhere
---     else, including 6.123e-17 away from it. That fires on authored input only.
---
--- Both deserve a total order. Only the first was going to be found by using the software.
---
--- ## The rule
+-- canonical representative, so an operation combining several of them chooses one for each
+-- before it starts.
 --
 -- **Pick one reference, apply one total order, and define it at the tie.**
 --
--- Total is the word doing the work. An order that is undefined on equal elements is not an
--- order, and the place it is undefined is exactly the symmetric case, which is the case a
--- well-formed input produces. Both bugs above are the same bug at different points of that
--- sentence: one had no order, one had two.
+-- Total is the word doing the work. An order undefined on equal elements is not an order, and
+-- the place it is undefined is the symmetric case, which is what a well-formed input produces.
+--
+-- ## Where the rule comes from
+--
+-- One place, and not two. `KusudamaSolver` derived the pole of its projection by summing every
+-- cone centre and normalising. Three equidistant cones sum to zero, `normalize` of zero is
+-- undefined, and one unit in the last place moved the pole 45 degrees. A mean of directions is
+-- not a direction, and the repair is a different algorithm rather than a corrected line. See
+-- `KusudamaEncoding`.
+--
+-- The sharp part of that finding is not the tie. It is:
+--
+-- **A degenerate point matters in proportion to how much the operation amplifies near it.**
+-- `normalize(sum)` divides by a quantity going to zero, so the whole neighbourhood of the tie
+-- is wrong and not merely the tie. That is why it fired on ordinary input.
+--
+-- ## What this file is not evidence of
+--
+-- Godot's `spherical_cubic_interpolate` picks a sign for three quaternions with two different
+-- tie breaks, `signbit` for two of them and `<= 0` for the third. They differ at exactly one
+-- value, `+0.0`, which a computed rotation never produces and an authored key does.
+--
+-- **That is a deletable inconsistency and not a second instance of the rule.** One line
+-- disagrees with two lines; make them agree and it is gone, with no design change. Treating it
+-- as evidence for a principle would inflate a typo into a category, and the principle above
+-- stands on the kusudama finding alone.
+--
+-- What survives from it is `align` below, which is a total order on the representative and is
+-- worth having on its own terms. It is a definition this project can use, not an argument.
 
 import Shared.Types
 
