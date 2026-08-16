@@ -1,86 +1,31 @@
-# lean-humanoid-rom
+# entities-humanoid-rom
 
-Humanoid range-of-motion / IK-constraint hexagon: ROM math, Kusudama, muscle/prismatic constraints (core); B3D/AddBiomechanics parsers + GPU shader + python tools (adapters). See `CITATIONS.bib` for the body-model / biomechanics / IK references.
+Humanoid range-of-motion and IK-constraint hexagon: ROM math, Kusudama, muscle and prismatic constraints (core); B3D/AddBiomechanics parsers, a GPU shader and python tools (adapters). See `CITATIONS.bib` for the body-model, biomechanics and IK references.
 
-> Split out of the [`lean-predictive-bvh`](https://github.com/v-sekai-multiplayer-fabric/lean-predictive-bvh) monorepo (now archived). Each hexagon cluster is its own repo following the `core/ports/adapters` convention; cross-cluster wiring is via Lake `require ... from git`.
+> Split out of the [`lean-predictive-bvh`](https://github.com/v-sekai-multiplayer-fabric/lean-predictive-bvh) monorepo (now archived). Each hexagon cluster is its own repository following the `core/ports/adapters` convention; cross-cluster wiring is via Lake `require ... from git`.
 
 ## Dependencies
 
-- [`lean-shared-core`](v-sekai-multiplayer-fabric/lean-shared-core) — common primitive types
+- [`entities-lean-shared`](https://github.com/v-sekai-multiplayer-fabric/entities-lean-shared) — common primitive types
 - [`LeanSlang`](https://github.com/V-Sekai-fire/lean-slang) — Slang/HLSL AST for the Kusudama shader (pure-Lean use; no FFI link)
 
 ## Build
 
 ```sh
-lake build         # production gate: typecheck the  cluster
+lake build           # production gate: typecheck the cluster
 lake build Research  # research-tier (non-gating; may fail)
 ```
 
 ## Hexagon layout
 
-- `core/` — dependency-free domain logic + proofs
-- `ports/` — narrow driving (source) / driven (sink) contracts
+- `core/` — dependency-free domain logic and proofs
+- `ports/` — narrow driving (source) and driven (sink) contracts
 - `adapters/` — concrete I/O at the edges
 
-## Remark: the simulator enforces no range of motion
+## Findings
 
-`HumanoidRom/core/SimulatorLimits.lean` records a measurement taken from the SOMA humanoid
-that the pretrained motion trackers were trained against. Every one of its 66 hinge joints
-declares the range -180 to 180 degrees:
+`FINDINGS.md` carries three, each with the Lean file that records its measurement:
 
-    joints 67, limited 66, unlimited 1 (the free root)
-    limited hinge span, degrees: min 360.0, median 360.0, max 360.0
-
-So a knee may invert and an elbow may fold backwards, and the simulator raises no objection.
-It also sets the controller's action range. ProtoMotions derives a 3 DOF action scale as
-`min (2 * action_scale * max |limit|) pi`, every SOMA joint is 3 DOF, and every limit is 180
-degrees, so the scale saturates at pi for all 66. A normalised action of 1.0 commands a
-target of 180 degrees.
-
-**The MJCF is not changed to match this repository.** The tracker scores 0.9996 against that
-file, so its actions are calibrated to a pi scale, and narrowing the ranges would change what
-an action means and invalidate the weights. The MJCF has the testing hours and this repository
-does not.
-
-Range of motion therefore belongs on a different seam. It validates motion that a simulator
-produces or that a corpus supplies. It is not a constraint the simulator holds, and a pose
-outside these ranges is one to reject or to flag rather than one to clamp.
-
-## Remark: the kusudama flip is a degenerate centroid
-
-`HumanoidRom/core/KusudamaEncoding.lean` records why a kusudama solve flips when three cones
-are equidistant, and it is not a race.
-
-`KusudamaSolver` builds the pole of its gnomonic projection by summing every cone centre and
-normalising. **Three equidistant cones sum to zero.** Measured in double precision:
-
-    3 equidistant, 120 degrees apart   |sum| = 4.003e-16   degenerate
-    4 tetrahedral                      |sum| = 0           degenerate
-    2 opposed                          |sum| = 0           degenerate
-    3 clustered, asymmetric            |sum| = 2.800       fine
-
-`normalize` of zero is undefined, so the pole follows whatever noise survives the sum.
-Perturbing one coordinate by a single unit in the last place moves it from (0, 1, 0) to
-(-0.707, 0.707, 0), which is 45 degrees of swing from one bit. That reproduces on one thread,
-so it is a discontinuous function evaluated at its discontinuity rather than a race.
-
-The degenerate cases are the well-formed ones. A symmetric limit is what a joint with no
-preferred direction has, so the solver failed exactly on the limits an author writes by hand.
-
-**The fix is to stop deriving a pole.** A gnomonic projection is only valid inside a hemisphere
-of its pole, so a pole averaged over cones that span more than a hemisphere was wrong before it
-was degenerate. Project against the nearest cone instead: it is a real cone centre, so it is a
-unit vector by construction and never needs normalising, and ties break by the lower index,
-which is a total order and gives the same answer on every machine and in every thread.
-
-The file proves the degeneracy of the opposed and equidistant cases, that an asymmetric case is
-fine, and that the nearest cone is defined and deterministic on both degenerate inputs.
-
-## Remark: a joint limit is one kusudama, not three ranges
-
-A SOMA joint is three hinges named `_x`, `_y` and `_z`, and an MJCF `range` on each describes a
-box. A shoulder is not a box. The reachable set is a region on a sphere, and an arm may reach
-far to one side only while it is also low, which a cone sequence says and three ranges cannot.
-
-So 66 scalar limits become 22 kusudamas, one for each joint, each a swing cone sequence with a
-twist range.
+- **The simulator enforces no range of motion.** All 66 SOMA hinge joints declare -180 to 180 degrees, so a knee may invert and the simulator raises no objection. The MJCF is not changed to match this repository, and the reason is in the file.
+- **The kusudama flip is a degenerate centroid, not a race.** Three equidistant cones sum to zero, and one unit in the last place moves the derived pole by 45 degrees. The fix is to stop deriving a pole.
+- **A joint limit is one kusudama, not three ranges.** A shoulder's reachable set is a region on a sphere, so 66 scalar limits become 22 kusudamas.
