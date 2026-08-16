@@ -1,4 +1,4 @@
-# AGENTS.md — lean-humanoid-rom
+# AGENTS.md — entities-humanoid-rom
 
 Guidance for AI coding agents working in this repo.
 
